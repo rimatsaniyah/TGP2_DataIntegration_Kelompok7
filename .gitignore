@@ -1,0 +1,17 @@
+# Jupyter
+.ipynb_checkpoints
+
+# Data
+/data/*
+!/data/README.md
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# System files
+.DS_Store
+Thumbs.db
