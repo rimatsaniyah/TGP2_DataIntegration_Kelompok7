@@ -1,21 +1,21 @@
 import pandas as pd
 
-# Path ke folder .dat kamu
-base_path = '../data/ml-1m/'
+# Konversi ratings.dat
+ratings = pd.read_csv('../data/ml-1m/ratings.dat', sep='::', engine='python',
+                      names=['userId', 'movieId', 'rating', 'timestamp'],
+                      encoding='latin-1')
+ratings.to_csv('../data/ml-1m/ratings.csv', index=False)
 
 # Konversi movies.dat
-movies = pd.read_csv(base_path + 'movies.dat', sep='::', engine='python',
-                     names=['MovieID', 'Title', 'Genres'], encoding='latin-1')
-movies.to_csv(base_path + 'movies.csv', index=False)
+movies = pd.read_csv('../data/ml-1m/movies.dat', sep='::', engine='python',
+                     names=['movieId', 'title', 'genres'],
+                     encoding='latin-1')
+movies.to_csv('../data/ml-1m/movies.csv', index=False)
 
-# Konversi ratings.dat
-ratings = pd.read_csv(base_path + 'ratings.dat', sep='::', engine='python',
-                      names=['UserID', 'MovieID', 'Rating', 'Timestamp'], encoding='latin-1')
-ratings.to_csv(base_path + 'ratings.csv', index=False)
+# Konversi users.dat (opsional)
+users = pd.read_csv('../data/ml-1m/users.dat', sep='::', engine='python',
+                    names=['userId', 'gender', 'age', 'occupation', 'zipCode'],
+                    encoding='latin-1')
+users.to_csv('../data/ml-1m/users.csv', index=False)
 
-# Konversi users.dat
-users = pd.read_csv(base_path + 'users.dat', sep='::', engine='python',
-                    names=['UserID', 'Gender', 'Age', 'Occupation', 'Zip-code'], encoding='latin-1')
-users.to_csv(base_path + 'users.csv', index=False)
-
-print("✅ Konversi selesai! Cek file .csv di folder data/ml-1m/")
+print("✅ Konversi berhasil! Semua file .dat telah diubah ke .csv")
