@@ -1,0 +1,134 @@
+version: "3.8"
+services:
+  # Zookeeper
+  zookeeper:
+    networks:
+      - mdik-net
+    image: bitnami/zookeeper:latest
+    ports:
+      - "2181:2181"
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: yes
+
+  kafka:
+    image: bitnami/kafka:3.2.3   # <- GUNAKAN VERSI 3.2.x
+    networks:
+      - mdik-net
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+
+  # MinIO as Datalake
+  minio:
+    image: minio/minio:latest
+    networks:
+      - mdik-net
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minio      # MinIO will now use this directly
+      MINIO_ROOT_PASSWORD: minio123 # MinIO will now use this directly
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Kafka Connect S3 Sink
+  kafka-connect:
+    image: confluentinc/cp-kafka-connect:latest
+    networks:
+      - mdik-net
+    ports:
+      - "8083:8083"
+    depends_on:
+      - kafka
+      - minio
+    environment:
+      CONNECT_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_BOOTSTRAP_SERVERS: kafka:9092
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: "s3-sink-group"
+      CONNECT_CONFIG_STORAGE_TOPIC: "connect-configs"
+      CONNECT_OFFSET_STORAGE_TOPIC: "connect-offsets"
+      CONNECT_STATUS_STORAGE_TOPIC: "connect-status"
+      CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
+      CONNECT_VALUE_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
+      CONNECT_PLUGIN_PATH: "/usr/share/java,/etc/kafka-connect/jars"
+      CONNECT_REST_ADVERTISED_HOST_NAME: "localhost"   # <=== Tambahkan ini
+    volumes:
+      - ./connect-jars:/etc/kafka-connect/jars
+
+  # PostgreSQL for Hive Metastore
+  postgres:
+    image: postgres:12
+    networks:
+      - mdik-net
+    environment:
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive
+      POSTGRES_DB: metastore
+    ports:
+      - "5432:5432"
+
+  # Hive Metastore server
+  hive-metastore:
+    image: apache/hive:3.1.3
+    networks:
+      - mdik-net
+    depends_on:
+      - postgres
+    environment:
+      - HIVE_METASTORE_DB_TYPE=postgres
+      - HIVE_METASTORE_DB_HOST=postgres
+      - HIVE_METASTORE_DB_NAME=metastore
+      - HIVE_METASTORE_DB_USER=hive
+      - HIVE_METASTORE_DB_PASS=hive
+    ports:
+      - "9083:9083"
+
+  # Spark (master)
+  spark:
+    image: bitnami/spark:latest
+    networks:
+      - mdik-net
+    ports:
+      - "8080:8080"
+    environment:
+      - SPARK_MODE=master
+
+  # Superset for visualization
+  superset:
+    image: apache/superset:latest
+    networks:
+      - mdik-net
+    ports:
+      - "8088:8088"
+    depends_on:
+      - hive-metastore
+    environment:
+      - SUPERSET_LOAD_EXAMPLES=yes
+    command: >
+      /bin/sh -c "
+      superset db upgrade &&
+      superset fab create-admin --username admin --firstname Superset --lastname Admin --email admin@superset.com --password admin &&
+      superset load_examples &&
+      superset init &&
+      superset run -h 0.0.0.0 -p 8088
+      "
+networks:
+  mdik-net:
+    driver: bridge
